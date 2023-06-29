@@ -1,35 +1,43 @@
 <!--
+{{/*
 Copyright © 2023 Andrew Fiorillo
 
-Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the “Software”), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated
+documentation files (the “Software”), to deal in the Software without restriction, including without limitation the
+rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit
+persons to whom the Software is furnished to do so, subject to the following conditions:
 
-The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the
+Software.
 
-THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
--->
+THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE
+WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-<!--
 This is a shortcode that produces an interactive calculator for bread recipes.
 It uses "baker's math" to represent and scale the ingredients.
 
 Expect the contents of the short code to contain a recipe as YAML.
 For example:
 
-{{< calculator >}}
+```
 ingredients:
-  - name: bread flour
-    is_flour: true  # if using multiple flours, they must all be flagged with `is_flour`
-    percent: 100
-  - name: water
-    percent: 65
-  - name: instant yeast
-    percent: 5
-  - name: salt
-    percent: 2
+- name: bread flour
+is_flour: true # if using multiple flours, they must all be flagged with `is_flour`
+percent: 100
+- name: water
+percent: 65
+- name: instant yeast
+percent: 5
+- name: salt
+percent: 2
 default_mass: 350
 portion_mass: 350
-{{< /calculator >}}
+```
+(/}}
 -->
+
 {{ $recipe := .Inner | transform.Unmarshal }}
 {{ $ingredients := $recipe.ingredients }}
 {{ $default_mass := $recipe.default_mass }}
@@ -41,23 +49,31 @@ portion_mass: 350
 {{ $total_percent := 0.0 }}
 
 {{ range $ingredients }}
-<!-- we want to split ingredients into the two categories for sorting -->
+<!-- {{/*
+    we want to split ingredients into the two categories for sorting 
+*/}} -->
 {{ if .is_flour }}
 {{ $flours = $flours | append . }}
 {{ $flour_percent = add $flour_percent .percent }}
 {{ else }}
 {{ $the_rest = $the_rest | append . }}
 {{ end }}
-<!-- and also we need the total percentage -->
+<!-- {{/*
+    and also we need the total percentage
+*/}} -->
 {{ $total_percent = add $total_percent .percent }}
 {{ end }}
 
-<!-- In baker's math, the flour should be represented as 100% and other ingredients percentages based on that -->
+<!-- {{/*
+    In baker's math, the flour should be represented as 100% and other ingredients percentages based on that
+*/}} -->
 {{ if ne $flour_percent 100.0 }}
 {{ errorf "Flour ingredients must add up to 100 percent. Currently they add to %f. See %+v" $flour_percent $flours }}
 {{ end }}
 
-<!-- so we can later access this from the JS callback -->
+<!-- {{/*
+    so we can later access this from the JS callback
+*/}} -->
 <span style="display: none;" id="total_percent">{{ $total_percent }}</span>
 
 <style>
@@ -225,6 +241,8 @@ portion_mass: 350
 {{ if $portion_mass }}
 <p class="table-caption">Recommended portions of <em>{{ $portion_mass }} g</em></p>
 {{ else }}
-<!-- instead of a caption we need something to recreate the margin -->
+<!-- {{/* 
+    instead of a caption we need something to recreate the margin 
+*/}} -->
 <div class="table-caption"></div>
 {{ end }}
