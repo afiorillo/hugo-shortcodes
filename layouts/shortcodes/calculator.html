@@ -38,6 +38,7 @@ portion_mass: 350
 */}}
 -->
 
+{{ $recipe_id := truncate 6 "" (md5 .Inner) }}
 {{ $recipe := .Inner | transform.Unmarshal }}
 {{ $ingredients := $recipe.ingredients }}
 {{ $default_mass := $recipe.default_mass }}
@@ -74,7 +75,7 @@ portion_mass: 350
 <!-- {{/*
     so we can later access this from the JS callback
 */}} -->
-<span style="display: none;" id="total_percent">{{ $total_percent }}</span>
+<span style="display: none;" id="total_percent_{{ $recipe_id }}">{{ $total_percent }}</span>
 
 <style>
     .ingredients-table {
@@ -148,20 +149,20 @@ portion_mass: 350
 </style>
 
 <script>
-    function update_mass_col() {
-        const target_mass = parseFloat(document.getElementById("mass_input").value);
-        update_target_mass(target_mass);
+    function update_mass_col(id_suffix) {
+        const target_mass = parseFloat(document.getElementById(`mass_input_${id_suffix}`).value);
+        update_target_mass(id_suffix, target_mass);
         // let's make the input out of focus now so if the user taps again it'll select all again
-        input_el = document.getElementById("mass_input");
+        input_el = document.getElementById(`mass_input_${id_suffix}`);
         if (input_el) {
             input_el.blur();
         }
     }
 
-    function update_target_mass(target_mass) {
+    function update_target_mass(id_suffix, target_mass) {
         const new_mass = parseFloat(target_mass);  // just in case
-        const total_percent = parseFloat(document.getElementById("total_percent").textContent);
-        const rows = document.querySelectorAll("#ingredients-table tbody tr");
+        const total_percent = parseFloat(document.getElementById(`total_percent_${id_suffix}`).textContent);
+        const rows = document.querySelectorAll(`#ingredients_table_${id_suffix} tbody tr`);
         rows.forEach(row => {
             const percentCell = row.querySelector(".percent-col");
             const massCell = row.querySelector(".mass-col");
@@ -192,14 +193,15 @@ portion_mass: 350
             const cleanMass = parseFloat(givenMass.replace(/[^\d.]/g, ''));
             if (cleanMass !== "") {
                 // then the given value was an actual number we can use
-                document.getElementById("mass_input").value = cleanMass;
-                update_target_mass(cleanMass);  // and recalculate the table
+                // {{/* since this ID is inside of an anonymous function, we will templatize it and it'll be rendered once for each use */}}
+                document.getElementById("mass_input_{{ $recipe_id }}").value = cleanMass;
+                update_target_mass("{{ $recipe_id }}", cleanMass);  // and recalculate the table
             }
         }
     });
 </script>
 
-<table id="ingredients-table" class="ingredients-table">
+<table id="ingredients_table_{{ $recipe_id }}" class="ingredients-table">
     <thead class="heading-row">
         <tr>
             <th class="name-col">Ingredient</th>
@@ -212,7 +214,8 @@ portion_mass: 350
         {{ range $flours }}
         <tr class="ingredients-row flour">
             <td class="name-col">{{ .name | markdownify }}</td>
-            <td class="percent-col" id="{{ .name }}-percent">{{ printf "%.1f" (float .percent) }} %</td>
+            <td class="percent-col" id="{{ .name }}_percent_{{ $recipe_id }}">{{ printf "%.1f" (float .percent) }} %
+            </td>
             <td class="mass-col">{{ printf "%.1f" (mul (div .percent $total_percent) $default_mass) }}</td>
         </tr>
         {{ end }}
@@ -220,7 +223,8 @@ portion_mass: 350
         {{ range $the_rest }}
         <tr class="ingredients-row the-rest">
             <td class="name-col">{{ .name | markdownify }}</td>
-            <td class="percent-col" id="{{ .name }}-percent">{{ printf "%.1f" (float .percent) }} %</td>
+            <td class="percent-col" id="{{ .name }}_percent_{{ $recipe_id }}">{{ printf "%.1f" (float .percent) }} %
+            </td>
             <td class="mass-col">{{ printf "%.1f" (mul (div .percent $total_percent) $default_mass) }}</td>
         </tr>
         {{ end }}
@@ -231,8 +235,9 @@ portion_mass: 350
             <td class="name-col">Total</td>
             <td class="percent-col">{{ printf "%.1f" $total_percent }} %</td>
             <td class="mass-col">
-                <input inputmode="numeric" pattern="[0-9\.]*" id="mass_input" value="{{ $default_mass }}"
-                    onchange="update_mass_col()" onfocus="select_all_text(this)">
+                <input inputmode="numeric" pattern="[0-9\.]*" id="mass_input_{{ $recipe_id }}"
+                    value="{{ $default_mass }}" onchange="update_mass_col('{{ $recipe_id }}')"
+                    onfocus="select_all_text(this)">
             </td>
         </tr>
     </tfoot>
