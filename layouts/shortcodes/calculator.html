@@ -1,0 +1,230 @@
+<!--
+Copyright © 2023 Andrew Fiorillo
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the “Software”), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+-->
+
+<!--
+This is a shortcode that produces an interactive calculator for bread recipes.
+It uses "baker's math" to represent and scale the ingredients.
+
+Expect the contents of the short code to contain a recipe as YAML.
+For example:
+
+{{< calculator >}}
+ingredients:
+  - name: bread flour
+    is_flour: true  # if using multiple flours, they must all be flagged with `is_flour`
+    percent: 100
+  - name: water
+    percent: 65
+  - name: instant yeast
+    percent: 5
+  - name: salt
+    percent: 2
+default_mass: 350
+portion_mass: 350
+{{< /calculator >}}
+-->
+{{ $recipe := .Inner | transform.Unmarshal }}
+{{ $ingredients := $recipe.ingredients }}
+{{ $default_mass := $recipe.default_mass }}
+{{ $portion_mass := $recipe.portion_mass }}
+
+{{ $flours := slice }}
+{{ $the_rest := slice }}
+{{ $flour_percent := 0.0 }}
+{{ $total_percent := 0.0 }}
+
+{{ range $ingredients }}
+<!-- we want to split ingredients into the two categories for sorting -->
+{{ if .is_flour }}
+{{ $flours = $flours | append . }}
+{{ $flour_percent = add $flour_percent .percent }}
+{{ else }}
+{{ $the_rest = $the_rest | append . }}
+{{ end }}
+<!-- and also we need the total percentage -->
+{{ $total_percent = add $total_percent .percent }}
+{{ end }}
+
+<!-- In baker's math, the flour should be represented as 100% and other ingredients percentages based on that -->
+{{ if ne $flour_percent 100.0 }}
+{{ errorf "Flour ingredients must add up to 100 percent. Currently they add to %f. See %+v" $flour_percent $flours }}
+{{ end }}
+
+<!-- so we can later access this from the JS callback -->
+<span style="display: none;" id="total_percent">{{ $total_percent }}</span>
+
+<style>
+    .ingredients-table {
+        max-width: 500px;
+        width: 100%;
+        margin: 0 auto;
+        table-layout: fixed;
+        border: 1px solid rgba(0, 0, 0, 0.2);
+    }
+
+    .heading-row {
+        border-bottom: 1px solid rgba(0, 0, 0);
+        background-color: whitesmoke;
+    }
+
+    .ingredients-row {
+        border-bottom: 1px dashed rgba(0, 0, 0, 0.2);
+    }
+
+    .calculation-row {
+        border-top: 1px solid rgba(0, 0, 0);
+        background-color: whitesmoke;
+    }
+
+    .flour {
+        background-color: white;
+    }
+
+    .the-rest {
+        background-color: white;
+    }
+
+    .name-col {
+        width: 60%;
+    }
+
+    .percent-col {
+        width: 20%;
+        text-align: right;
+    }
+
+    .mass-col {
+        width: 20%;
+        text-align: right;
+    }
+
+    .mass-col input {
+        width: 100%;
+        box-sizing: border-box;
+        text-align: right;
+    }
+
+    .table-caption {
+        text-align: center;
+        font-size: 10px;
+        margin-bottom: 1em;
+    }
+
+    /* Small screens */
+    @media screen and (max-width: 600px) {
+        .table-caption {
+            font-size: 14px;
+        }
+
+        .name-col,
+        .percent-col,
+        .mass-col {
+            font-size: 16px;
+        }
+    }
+</style>
+
+<script>
+    function update_mass_col() {
+        const target_mass = parseFloat(document.getElementById("mass_input").value);
+        update_target_mass(target_mass);
+        // let's make the input out of focus now so if the user taps again it'll select all again
+        input_el = document.getElementById("mass_input");
+        if (input_el) {
+            input_el.blur();
+        }
+    }
+
+    function update_target_mass(target_mass) {
+        const new_mass = parseFloat(target_mass);  // just in case
+        const total_percent = parseFloat(document.getElementById("total_percent").textContent);
+        const rows = document.querySelectorAll("#ingredients-table tbody tr");
+        rows.forEach(row => {
+            const percentCell = row.querySelector(".percent-col");
+            const massCell = row.querySelector(".mass-col");
+
+            const percentValue = parseFloat(percentCell.textContent);
+            const newMass = (percentValue / total_percent) * new_mass;
+
+            massCell.textContent = newMass.toFixed(1);
+        })
+    }
+
+    // these two functions are helpers to make the mass input box more mobile friendly
+    // annoyingly, `type="number"` inputs don't support setting selection, so we need to
+    // make an ersatz number input
+    function select_all_text(input_el) {
+        input_el.setSelectionRange(0, input_el.value.length);
+    }
+
+    function validate_numeric_input(input_el) {
+        input.value = input.value.replace(/[^\d.]/g, '');
+    }
+
+    // if the URL contains a `?mass=` query param, we can use that to override the starting value
+    document.addEventListener("DOMContentLoaded", function () {
+        const urlParams = new URLSearchParams(window.location.search);
+        const givenMass = urlParams.get("mass");
+        if (givenMass !== null) {
+            const cleanMass = parseFloat(givenMass.replace(/[^\d.]/g, ''));
+            if (cleanMass !== "") {
+                // then the given value was an actual number we can use
+                document.getElementById("mass_input").value = cleanMass;
+                update_target_mass(cleanMass);  // and recalculate the table
+            }
+        }
+    });
+</script>
+
+<table id="ingredients-table" class="ingredients-table">
+    <thead class="heading-row">
+        <tr>
+            <th class="name-col">Ingredient</th>
+            <th class="percent-col">Percent</th>
+            <th class="mass-col">Mass (g)</th>
+        </tr>
+    </thead>
+
+    <tbody>
+        {{ range $flours }}
+        <tr class="ingredients-row flour">
+            <td class="name-col">{{ .name | markdownify }}</td>
+            <td class="percent-col" id="{{ .name }}-percent">{{ printf "%.1f" (float .percent) }} %</td>
+            <td class="mass-col">{{ printf "%.1f" (mul (div .percent $total_percent) $default_mass) }}</td>
+        </tr>
+        {{ end }}
+
+        {{ range $the_rest }}
+        <tr class="ingredients-row the-rest">
+            <td class="name-col">{{ .name | markdownify }}</td>
+            <td class="percent-col" id="{{ .name }}-percent">{{ printf "%.1f" (float .percent) }} %</td>
+            <td class="mass-col">{{ printf "%.1f" (mul (div .percent $total_percent) $default_mass) }}</td>
+        </tr>
+        {{ end }}
+    </tbody>
+
+    <tfoot>
+        <tr class="calculation-row">
+            <td class="name-col">Total</td>
+            <td class="percent-col">{{ printf "%.1f" $total_percent }} %</td>
+            <td class="mass-col">
+                <input inputmode="numeric" pattern="[0-9\.]*" id="mass_input" value="{{ $default_mass }}"
+                    onchange="update_mass_col()" onfocus="select_all_text(this)">
+            </td>
+        </tr>
+    </tfoot>
+</table>
+
+{{ if $portion_mass }}
+<p class="table-caption">Recommended portions of <em>{{ $portion_mass }} g</em></p>
+{{ else }}
+<!-- instead of a caption we need something to recreate the margin -->
+<div class="table-caption"></div>
+{{ end }}
